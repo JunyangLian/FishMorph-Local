@@ -85,9 +85,15 @@ def main() -> int:
             keypoints_full = result.get("keypoints") or result.get("warped_keypoints") or {}
             short_keypoints = full_to_short_keypoints(keypoints_full)
             record["keypoints_px"] = {k: list(v) for k, v in keypoints_full.items()}
-            record["segmentation_success"] = result.get("segmentation_success")
-            record["needs_review"] = result.get("needs_review")
-            record["review_reason"] = result.get("review_reason")
+            seg_quality = result.get("segmentation_quality", {})
+            record["segmentation_success"] = seg_quality.get("segmentation_success")
+            record["segmentation_quality"] = {k: v for k, v in seg_quality.items() if isinstance(v, (int, float, bool, str))}
+            try:
+                qc = json.loads(result.get("metadata", {}).get("keypoint_correction_log", "{}")).get("qc", {})
+            except Exception:  # noqa: BLE001
+                qc = {}
+            record["needs_review"] = qc.get("needs_review")
+            record["review_reason"] = qc.get("review_reason")
 
             # 3) 测量（仅有比例尺时毫米值才有物理意义）
             sl = tl = None
