@@ -36,7 +36,11 @@ def main() -> int:
     parser.add_argument("--weights", default="runs/pose/fewshot_n10_crop/weights/best.pt")
     parser.add_argument("--pck-px", type=float, default=15.0)
     parser.add_argument("--preview", action="store_true")
+    parser.add_argument("--manifest", default=None, help="数据集 split_manifest.json：只评估其 test 划分")
+    parser.add_argument("--board-value-min", type=float, default=170.0, help="尾鳍恢复/推导的亮度阈值（per-species）")
+    parser.add_argument("--sat-min", type=float, default=35.0)
     args = parser.parse_args()
+    profile = {"board_value_min": args.board_value_min, "sat_min": args.sat_min}
 
     from siganusmorph.caudal_fin_profile import derive_caudal_points
     from siganusmorph.image_utils import load_image_file
@@ -48,6 +52,10 @@ def main() -> int:
     records = [json.loads(p.read_text(encoding="utf-8"))
                for p in sorted((ws / "annotations").glob("*.json"))
                if json.loads(p.read_text(encoding="utf-8")).get("status") == "done"]
+    if args.manifest:
+        manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+        test_stems = {s.split("/", 1)[1] if "/" in s else s for s in manifest["assignment"]["test"]}
+        records = [r for r in records if r["image_stem"] in test_stems]
     if not records:
         raise SystemExit("没有 status=done 的真值标注")
 
@@ -66,7 +74,7 @@ def main() -> int:
 
         # caudal profile：尾三点（P5 用模型自己的体部点）
         body_mask, _bbox, _q = segment_fish_from_blue_board(image)
-        caudal = derive_caudal_points(image, body_mask, body_pts["P5"])
+        caudal = derive_caudal_points(image, body_mask, body_pts["P5"], profile=profile)
         merged = dict(body_pts)
         for code in ("P6", "P7U", "P7L"):
             if caudal[code] is not None:

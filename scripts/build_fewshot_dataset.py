@@ -36,7 +36,9 @@ BBOX_PAD_RATIO = 0.2  # 极端点（P1/P7U/P7L）定义 bbox 边界，padding �
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--batch", required=True, nargs="+", help="标注工作区批次名（可多个）")
-    parser.add_argument("--train-n", type=int, default=3, help="训练集图片数；等于总数时 val=train（仅全量档）")
+    parser.add_argument("--train-n", type=int, default=3, help="训练集图片数；val/test 依次向后切")
+    parser.add_argument("--val-n", type=int, default=2, help="验证集图片数（检查点选择）")
+    parser.add_argument("--test-n", type=int, default=0, help="测试集图片数（不参与训练与检查点选择）")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--schema", choices=["11pt", "16pt"], default="11pt",
                         help="11pt=schema v2；16pt=兼容 Siganus 权重微调（P4/C1-C4 置 v=0，不参与损失）")
@@ -57,22 +59,25 @@ def main() -> int:
                 records.append(record)
     if not records:
         raise SystemExit("没有 status=done 的标注")
-    if args.train_n > len(records):
-        raise SystemExit(f"--train-n={args.train_n} 超过已完成标注数 {len(records)}")
+    if args.train_n + args.val_n + args.test_n > len(records):
+        raise SystemExit(f"--train-n {args.train_n} + --val-n {args.val_n} + --test-n {args.test_n} 超过已完成标注数 {len(records)}")
 
     stems = [r["image_stem"] for r in records]
     rng = random.Random(args.seed)
     rng.shuffle(stems)
+    # test 永远从序列末尾切（跨 train-n 臂保持同一测试集）；val 紧邻其前；其余为 train
+    test_stems = set(stems[len(stems) - args.test_n:]) if args.test_n else set()
+    val_stems = set(stems[len(stems) - args.test_n - args.val_n: len(stems) - args.test_n]) if args.val_n else set()
     train_stems = set(stems[: args.train_n])
-    if args.train_n == len(records):
-        print("警告：--train-n 等于总图数，val=train（检查点选择偏乐观，仅用于全量档）")
+    if args.test_n == 0 and args.train_n + args.val_n == len(records):
+        print("警告：train+val 等于总图数（无独立测试集）")
 
     tag = "-".join(args.batch)
     out = Path(args.out) if args.out else ROOT / "data" / "fewshot_datasets" / (
         f"{tag}_{args.schema}_crop_n{args.train_n}_s{args.seed}"
         if args.crop else f"{tag}_{args.schema}_n{args.train_n}_s{args.seed}"
     )
-    for split in ("train", "val"):
+    for split in ("train", "val", "test"):
         (out / "images" / split).mkdir(parents=True, exist_ok=True)
         (out / "labels" / split).mkdir(parents=True, exist_ok=True)
 
@@ -80,11 +85,15 @@ def main() -> int:
         from siganusmorph.image_utils import load_image_file
         from siganusmorph.segmentation import padded_bbox, segment_fish_from_blue_board
 
-    assignment = {"train": [], "val": []}
+    assignment = {"train": [], "val": [], "test": []}
     crop_stats = {"crop": 0, "full": 0}
     for record in records:
         stem = record["image_stem"]
-        split = "train" if stem in train_stems else "val"
+        split = ("train" if stem in train_stems else
+                 "val" if stem in val_stems else
+                 "test" if stem in test_stems else None)
+        if split is None:
+            continue
         file_key = f"{record['_batch']}_{stem}"  # 跨批次 stem 可能重名，加前缀防覆盖
         img_src = ROOT / "data" / "annotation_workspace" / record["_batch"] / "warped" / record["warped_image"]
         img_dst = out / "images" / split / f"{file_key}.png"
@@ -142,12 +151,11 @@ def main() -> int:
         (out / "labels" / split / f"{file_key}.txt").write_text(label + "\n", encoding="utf-8")
         assignment[split].append(f"{record['_batch']}/{stem}")
 
-    if not assignment["val"]:  # 全量档：val 复制 train，保证 ultralytics 校验可用
-        for split in ("train", "val"):
-            for src in sorted((out / "images" / "train").iterdir()):
-                shutil.copyfile(src, out / "images" / "val" / src.name)
-            for src in sorted((out / "labels" / "train").iterdir()):
-                shutil.copyfile(src, out / "labels" / "val" / src.name)
+    if not assignment["val"]:  # 无独立 val 时复制 train，保证 ultralytics 校验可用
+        for src in sorted((out / "images" / "train").iterdir()):
+            shutil.copyfile(src, out / "images" / "val" / src.name)
+        for src in sorted((out / "labels" / "train").iterdir()):
+            shutil.copyfile(src, out / "labels" / "val" / src.name)
         assignment["val"] = list(assignment["train"])
 
     data_yaml = (
@@ -164,8 +172,10 @@ def main() -> int:
     print(f"schema: {args.schema} · kpt_shape: {kpt_shape}（点序: {' '.join(point_order)}）")
     print(f"train ({len(assignment['train'])}): {', '.join(assignment['train'])}")
     print(f"val   ({len(assignment['val'])}): {', '.join(assignment['val'])}")
+    print(f"test  ({len(assignment['test'])}): {', '.join(assignment['test'])}")
     (out / "split_manifest.json").write_text(
         json.dumps({"batch": args.batch, "seed": args.seed, "train_n": args.train_n,
+                    "val_n": args.val_n, "test_n": args.test_n,
                     "schema": args.schema, "crop": args.crop,
                     "assignment": assignment, "point_order": point_order},
                    ensure_ascii=False, indent=1),
