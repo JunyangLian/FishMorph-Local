@@ -20,6 +20,8 @@ import sys
 import traceback
 from pathlib import Path
 
+import cv2
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(ROOT))
@@ -99,9 +101,10 @@ def main() -> int:
             draw_measurements = record.get("measurements_mm")
             preview = draw_keypoints_and_measurements(target, short_keypoints, draw_measurements, image_name=path.stem)
             preview_path = trial_dir / f"{path.stem}_annotated.png"
-            import cv2
-
-            cv2.imwrite(str(preview_path), cv2.cvtColor(preview, cv2.COLOR_RGB2BGR))
+            ok, buf = cv2.imencode(".png", cv2.cvtColor(preview, cv2.COLOR_RGB2BGR))
+            if not ok:
+                raise IOError("imencode preview failed")
+            preview_path.write_bytes(buf.tobytes())
 
             seg_flag = "OK" if result.get("segmentation_success") else "FAIL"
             qc_flag = "review" if result.get("needs_review") else "ok"
