@@ -65,10 +65,14 @@ def marker_centers(markers: Mapping[int, list[list[float]]]) -> dict[int, tuple[
 
 
 def select_board_config_for_markers(markers: Mapping[int, list[list[float]]]) -> dict[str, Any]:
-    """Choose the most specific known board layout from detected marker IDs."""
+    """Choose the most specific known board layout from detected marker IDs.
+
+    布局模式按"已检出的布局标记数 ≥4"选择：布局单应性由全部检出标记支撑
+    （RANSAC），可容忍个别角标被遮挡，不再要求 8 个标记全齐。
+    """
     detected_ids = set(int(marker_id) for marker_id in markers)
     v2_ids = set(A3_V2_CHARUCO_PLUMB_CONFIG["location_marker_squares_mm"])
-    if v2_ids.issubset(detected_ids):
+    if len(v2_ids & detected_ids) >= 4:
         return dict(A3_V2_CHARUCO_PLUMB_CONFIG)
     return dict(DEFAULT_BOARD_CONFIG)
 
@@ -166,8 +170,7 @@ def _warp_board_by_marker_layout(
     detected_layout_ids = sorted(set(int(marker_id) for marker_id in marker_positions) & set(marker_layout))
     corner_ids = {int(marker_id) for marker_id in board_config["aruco_corner_ids"].values()}
     missing_corners = sorted(corner_ids - set(detected_layout_ids))
-    if missing_corners:
-        raise ValueError(f"Missing required corner ArUco markers: {missing_corners}")
+    # 角标缺失不再阻断：单应性由全部检出标记（≥4，RANSAC）支撑，个别角标被遮挡可补偿。
     if len(detected_layout_ids) < 4:
         raise ValueError("At least four known ArUco markers are required for board warping.")
 
