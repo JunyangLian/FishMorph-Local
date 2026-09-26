@@ -1,0 +1,18 @@
+# FishMorph Local —— Siganus V1 运行时依赖
+# 迁移验证环境：Python 3.10.1 / Windows 10 x64
+# 实际安装版本：streamlit 1.52.2, opencv 4.12.0, ultralytics 8.3.252, torch 2.5.1+cu121
+
+streamlit>=1.32
+opencv-contrib-python>=4.8
+numpy>=1.24
+pandas>=2.0
+openpyxl>=3.1
+Pillow>=10.0
+pillow-heif>=0.16
+
+# 自动预标注推理（懒加载 import；原 SiganusMorph requirements 缺失，此处补齐）
+ultralytics>=8.2
+torch>=2.0
+
+# 说明：原 requirements 中的 reportlab / tables 在 V1 运行时代码中从未被 import，
+# 迁移时不携带。若后续恢复相关导出功能再另行加入。

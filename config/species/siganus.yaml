@@ -1,0 +1,28 @@
+# FishMorph Local —— species profile：蓝子鱼（Siganus）
+#
+# 这是 FishMorph 多鱼种扩展的最小配置入口。
+# 当前 V1 运行时尚未直接读取此文件：它先作为 species registry 的声明式描述存在。
+# 后续多鱼种重构将把 keypoint / measurement / model / QC profile 的加载
+# 切换到这一配置层（见 docs/MULTISPECIES_TODO.md）。
+
+species_id: siganus
+display_name: 蓝子鱼 (Siganus)
+profile_version: v1
+
+keypoint_schema: siganus_16pt_v1
+measurement_profile: siganus_v1
+model_profile: siganus_v1
+qc_profile: siganus_v1
+
+# 当前 V1 运行时实际加载的模型（相对项目根目录）
+model_files:
+  yolopose_preannotation: models/siganusmorph_yolopose_v0.3_corrected_real_5_15/preannotation_candidate.pt
+  heatmap_unet_v01: models/siganusmorph_heatmap_unet_v0.1/preannotation_candidate.pt
+  heatmap_unet_v05: models/siganusmorph_heatmap_unet_v0.5/preannotation_candidate.pt
+
+keypoint_count: 16
+
+notes: >
+  V1 的 16 关键点定义位于 siganusmorph/config.py 的 KEYPOINT_DEFS；
+  模型路径解析位于 siganusmorph/preannotation.py、heatmap_preannotation.py、
+  v06_preannotation.py。迁移阶段保持这些实现不变，species profile 层仅作声明与未来接入预留。

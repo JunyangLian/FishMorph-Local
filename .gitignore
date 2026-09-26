@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Runtime outputs (created on demand by the app)
+results/
+runs/
+*.sqlite3
+
+# Datasets (large training data stay out of git)
+datasets/
+
+# Model weights stay on disk but out of git (copied from source project)
+models/
+*.pt
+*.pth
+*.onnx
+
+# Large local data: ignore by default, keep calibration-board print assets
+data/*
+!data/calibration_board/
+!data/calibration_board/**
+
+# Secrets / local config
+.env
+*.env
+.streamlit/secrets.toml
+
+# Node / frontend build
+node_modules/
+dist/
+.vite/
