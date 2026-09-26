@@ -26,6 +26,8 @@ def main() -> int:
     parser.add_argument("--device", default=None, help="0 / cpu，默认自动")
     parser.add_argument("--name", default="fewshot")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--aug-safe", action="store_true",
+                        help="少样本安全增广：关闭 mosaic/翻转，收窄 scale/translate（防止 bbox 边缘极端点被增广推出后剔除损失）")
     args = parser.parse_args()
 
     if not Path(args.base).exists():
@@ -40,6 +42,9 @@ def main() -> int:
     print(f"device={args.device} base={args.base} data={args.data}")
 
     model = YOLO(str(Path(args.base).resolve()))
+    extra = {}
+    if args.aug_safe:
+        extra.update(mosaic=0.0, fliplr=0.0, scale=0.2, translate=0.05, degrees=0.0, shear=0.0, perspective=0.0)
     model.train(
         data=str(Path(args.data).resolve()),
         epochs=args.epochs,
@@ -50,6 +55,7 @@ def main() -> int:
         seed=args.seed,
         workers=0,  # Windows + 小数据集避免 dataloader 多进程问题
         exist_ok=True,
+        **extra,
     )
     weights_dir = ROOT / "runs" / "pose" / args.name / "weights"
     best = weights_dir / "best.pt"
