@@ -112,6 +112,60 @@ def derive_caudal_points(
     return {"P6": p6, "P7U": p7u, "P7L": p7l, "quality": quality}
 
 
+def recover_tail_fin(
+    warped_rgb: np.ndarray,
+    body_mask: np.ndarray,
+    profile: dict[str, Any] | None = None,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """恢复被蓝板判定吃掉的半透明尾鳍：返回 (恢复区域掩膜, 质量)。
+
+    适用场景：体掩膜在尾鳍基部截断（半透明鳍膜透蓝，被"蓝色=板"规则判为背景）。
+    恢复区域 = 体掩膜右缘以外的带状区（垂直范围参照掩膜右缘处的鱼体厚度 ±50%），
+    条件 = 蓝窗内但 V < board_value_min（暗蓝=鳍），闭运算后保留与体掩膜相邻的组件。
+    """
+    prof = {**SEA_BASS_PROFILE, **(profile or {})}
+    height, width = warped_rgb.shape[:2]
+    hsv = cv2.cvtColor(warped_rgb, cv2.COLOR_RGB2HSV)
+    h, s, v = cv2.split(hsv)
+
+    ys, xs = np.where(body_mask > 0)
+    if len(xs) == 0:
+        return np.zeros_like(body_mask), {"status": "empty_body_mask"}
+    body_x1 = int(xs.max())
+    # 体掩膜右缘处的鱼体垂直厚度
+    col = body_mask[:, body_x1] > 0
+    ys_col = np.where(col)[0]
+    if len(ys_col) == 0:
+        return np.zeros_like(body_mask), {"status": "empty_right_edge"}
+    y_lo, y_hi = int(ys_col.min()), int(ys_col.max())
+    band_h = y_hi - y_lo
+    y_lo = max(0, y_lo - int(0.5 * band_h) - 20)
+    y_hi = min(height, y_hi + int(0.5 * band_h) + 20)
+
+    fin = ((h >= prof["hue_min"]) & (h <= prof["hue_max"]) &
+           (s >= prof["sat_min"]) & (v < prof["board_value_min"])).astype(np.uint8) * 255
+    rx0 = max(0, body_x1 - int(0.05 * width))
+    fin_region = np.zeros_like(body_mask)
+    fin_region[y_lo:y_hi, rx0:width] = fin[y_lo:y_hi, rx0:width]
+
+    fin_region = cv2.morphologyEx(fin_region, cv2.MORPH_CLOSE,
+                                  cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)), iterations=2)
+    # 只保留与体掩膜相邻（膨胀后相交）的组件，剔除远处板面噪点
+    body_dil = cv2.dilate(body_mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (61, 61)))
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(fin_region, connectivity=8)
+    keep = np.zeros_like(fin_region)
+    for i in range(1, n):
+        x, y, w_, h_, area = stats[i]
+        if area < 2000:
+            continue
+        if np.any(body_dil[y:y + h_, x:x + w_] > 0):
+            keep[labels == i] = 255
+    quality = {"status": "ok" if np.any(keep) else "nothing_recovered",
+               "recovered_px": int(np.count_nonzero(keep)),
+               "new_right_edge": int(max(np.where(keep > 0)[1].max(), body_x1)) if np.any(keep) else body_x1}
+    return keep, quality
+
+
 def _fill_holes_u8(mask: np.ndarray) -> np.ndarray:
     ff = mask.copy()
     h, w = mask.shape
