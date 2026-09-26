@@ -36,6 +36,9 @@ data/*
 !data/calibration_board/
 !data/calibration_board/**
 
+# User photo batches (annotation input, kept out of git)
+photo/
+
 # Secrets / local config
 .env
 *.env
