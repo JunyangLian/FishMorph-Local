@@ -69,6 +69,7 @@
 
 ## 5. 明确暂不做
 
-- 任何新鱼种（罗非鱼、鲤鱼、石斑鱼等）的标注、训练或接入。
-- cross-species 模型 / few-shot adaptation / zero-shot 迁移实验。
+- 鲤鱼、石斑鱼等其他鱼种的接入（海鲈、罗非鱼已完成少样本接入流程验证，见 `FEWSHOT_EXPERIMENT_REPORT.md`）。
+- 海鲈 / 罗非鱼的工业化 species profile（当前为实验级参数与微调模型；尾鳍模块截形尾分支、README 口径外的精度承诺待做）。
+- cross-species 统一模型。
 - V2 功能合并、UI 大规模重构。
